@@ -11,6 +11,17 @@ SLEEP_PAGE = 1
 phone_regex = re.compile(r'(\+?\d[\d\s\-\(\)]{7,}\d)')
 
 
+# ---------------- BLOCKED SITES ----------------
+BLOCKED_DOMAINS = [
+    "temp-number.com"
+]
+
+
+def is_blocked_url(url):
+    return any(domain in url for domain in BLOCKED_DOMAINS)
+
+
+# ---------------- PHONE HELPERS ----------------
 def normalize_phone(phone):
     phone = phone.strip()
     phone = re.sub(r'[^\d+]', '', phone)
@@ -55,6 +66,7 @@ def is_valid_phone(phone):
     return True
 
 
+# ---------------- CONTENT FILTER ----------------
 BAD_CONTEXT = [
     "price", "usd", "market", "commodity",
     "ton", "mt", "steel price", "rate"
@@ -62,6 +74,10 @@ BAD_CONTEXT = [
 
 
 def extract_phones_from_url(url):
+    # 🚫 skip blocked sites completely
+    if is_blocked_url(url):
+        return []
+
     phones_found = set()
 
     try:
@@ -84,12 +100,13 @@ def extract_phones_from_url(url):
             if clean and is_valid_phone(clean):
                 phones_found.add(clean)
 
-    except:
+    except Exception:
         pass
 
     return list(phones_found)
 
 
+# ---------------- SOCIAL MEDIA ----------------
 SOCIAL_MEDIA_SITES = [
     "linkedin.com",
     "facebook.com",
@@ -104,8 +121,8 @@ def is_social_media(url):
     return any(site in url for site in SOCIAL_MEDIA_SITES)
 
 
+# ---------------- SEARCH + EXTRACT ----------------
 def search_and_extract(keyword):
-
     keyword_query = f"{keyword} contact phone whatsapp"
     results_set = set()
 
@@ -115,11 +132,18 @@ def search_and_extract(keyword):
             if not url:
                 continue
 
+            # 🚫 skip blocked URLs early
+            if is_blocked_url(url):
+                continue
+
             phones = extract_phones_from_url(url)
 
             if not phones and not is_social_media(url):
                 contact_url = url.rstrip("/") + "/contact"
-                phones = extract_phones_from_url(contact_url)
+
+                # 🚫 also block contact pages from blocked domains
+                if not is_blocked_url(contact_url):
+                    phones = extract_phones_from_url(contact_url)
 
             for ph in phones:
                 results_set.add((ph, url))
@@ -127,5 +151,4 @@ def search_and_extract(keyword):
             time.sleep(SLEEP_PAGE)
 
     time.sleep(SLEEP_SEARCH)
-
     return list(results_set)
